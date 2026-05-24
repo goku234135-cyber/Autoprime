@@ -6,6 +6,7 @@
   <title>Carrito — AutoPrime</title>
   <link rel="stylesheet" href="../css/style.css"/>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+  <script src="https://js.stripe.com/v3/"></script>
   <style>
     .cart-page { padding:3rem 0; min-height:70vh; }
     .cart-page-layout { display:grid; grid-template-columns:1fr 340px; gap:2rem; align-items:start; }
@@ -29,13 +30,98 @@
     .checkout-section { margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid rgba(255,255,255,.08); }
     .checkout-section h4 { font-size:.75rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:1rem; }
     .checkout-section .form-group { margin-bottom:.75rem; }
-    .checkout-section label { font-size:.75rem; }
-    .checkout-section input { padding:.7rem .85rem; font-size:.88rem; }
+    .checkout-section label { font-size:.75rem; color:var(--gray); display:block; margin-bottom:.3rem; }
+    .checkout-section input { padding:.7rem .85rem; font-size:.88rem; width:100%; box-sizing:border-box; }
+
+    /* Stripe Elements — misma apariencia que tus inputs */
+    .stripe-element-wrapper {
+      background: var(--dark3, #1a1a1a);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: var(--radius, 8px);
+      padding: .72rem .85rem;
+      transition: border-color .2s;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .stripe-element-wrapper.focused { border-color: var(--gold, #c9a84c); }
+    .stripe-element-wrapper.StripeElement--invalid { border-color: #e74c3c; }
+
+    .form-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+
+    /* Error Stripe */
+    #stripe-error {
+      color:#e74c3c; font-size:.82rem; padding:.4rem 0;
+      min-height:1.2rem; display:none;
+    }
+    #stripe-error.visible { display:block; }
+
+    /* Botón pagar */
+    .btn-pagar {
+      width:100%; display:flex; align-items:center; justify-content:center; gap:.6rem;
+      margin-top:.75rem; font-size:1rem; padding:1rem;
+      background: linear-gradient(135deg, var(--gold,#c9a84c), #f0d080);
+      color:#000; border:none; border-radius:var(--radius,8px);
+      font-weight:800; cursor:pointer; letter-spacing:1px;
+      font-family:var(--font-display, sans-serif);
+      transition:transform .2s, box-shadow .2s;
+    }
+    .btn-pagar:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 6px 20px rgba(201,168,76,.4); }
+    .btn-pagar:disabled { opacity:.55; cursor:not-allowed; }
+
+    .secure-badge {
+      display:flex; align-items:center; justify-content:center; gap:.4rem;
+      font-size:.72rem; color:#555; margin-top:.6rem;
+    }
+
+    /* Spinner dentro del botón */
+    .btn-spinner {
+      width:17px; height:17px;
+      border:2.5px solid rgba(0,0,0,.25);
+      border-top-color:#000;
+      border-radius:50%;
+      animation:spin .7s linear infinite;
+      flex-shrink:0;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* Overlay de éxito */
+    #pago-exitoso-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,.93); z-index:9999;
+      flex-direction:column; align-items:center; justify-content:center;
+      gap:1.2rem; text-align:center; padding:2rem;
+    }
+    #pago-exitoso-overlay.active { display:flex; }
+    .exito-icon {
+      width:84px; height:84px; border-radius:50%;
+      background:linear-gradient(135deg,var(--gold,#c9a84c),#f0d080);
+      display:flex; align-items:center; justify-content:center;
+      font-size:2.4rem;
+      animation:popIn .5s cubic-bezier(.175,.885,.32,1.275) forwards;
+    }
+    @keyframes popIn { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+
     @media(max-width:900px){ .cart-page-layout{grid-template-columns:1fr;} .order-summary{position:static;} }
   </style>
 </head>
 <body>
 
+<!-- ── OVERLAY PAGO EXITOSO ──────────────────────────────────── -->
+<div id="pago-exitoso-overlay">
+  <div class="exito-icon">✓</div>
+  <h2 style="font-family:var(--font-display);font-size:1.9rem;letter-spacing:2px;color:var(--gold,#c9a84c);margin:0;">
+    ¡PAGO EXITOSO!
+  </h2>
+  <p style="color:#aaa;max-width:380px;line-height:1.7;margin:0;">
+    Tu pago fue procesado correctamente por Stripe.<br>Gracias por tu compra en AutoPrime.
+  </p>
+  <p id="overlay-pedido-num" style="color:var(--gold,#c9a84c);font-weight:600;font-size:.95rem;margin:0;"></p>
+  <button class="btn-pagar" style="max-width:260px;margin-top:.5rem;" onclick="location.href='mis-pedidos.html'">
+    Ver Mis Pedidos →
+  </button>
+</div>
+
+<!-- ── NAVBAR ────────────────────────────────────────────────── -->
 <nav class="navbar">
   <a href="../index.html" class="navbar-logo">AUTO<span>PRIME</span></a>
   <ul class="navbar-links">
@@ -50,6 +136,7 @@
   </div>
 </nav>
 
+<!-- ── CONTENIDO ─────────────────────────────────────────────── -->
 <div class="container cart-page">
   <div id="cart-content">
     <div class="loading-spinner" style="padding:4rem 0">Cargando carrito...</div>
@@ -63,9 +150,20 @@
 
 <script src="../js/supabase-config.js"></script>
 <script>
-  let cartItems = [];
-  let currentUser = null;
+  // ── CONFIGURACIÓN ─────────────────────────────────────────────────
+  const SUPABASE_URL      = 'https://ycaqurmyedhvijofhqmu.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljYXF1cm15ZWRodmlqb2ZocW11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODg2ODUsImV4cCI6MjA5NDk2NDY4NX0.ntc-VOwvgx0AlYT-PMQkBgDUvkQoI9RCKnSVM-2ZZoE';
+  const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/create-payment-intent`;
+  const STRIPE_PK         = 'pk_test_51TaQX6QeoqGq9K6w8C8UkNbIjvK55jZ4gLwtdSSDkCD6Eml9v1j116jJQ3SKDsAwKhRDhsjh5gek6wfmxkP3PxG0004PZw6wEA';
 
+  let cartItems   = [];
+  let currentUser = null;
+  let stripe      = null;
+  let cardNumber  = null;
+  let cardExpiry  = null;
+  let cardCvc     = null;
+
+  // ── INIT ──────────────────────────────────────────────────────────
   Auth.onAuthStateChange(async () => {
     currentUser = await Auth.getCurrentUser();
     await NavHelper.init('../');
@@ -80,13 +178,10 @@
     await Cart.updateBadge();
   });
 
+  // ── RENDER ────────────────────────────────────────────────────────
   async function renderCartPage() {
     const content = document.getElementById('cart-content');
-    try {
-      cartItems = await Cart.getItems();
-    } catch(e) {
-      cartItems = [];
-    }
+    try { cartItems = await Cart.getItems(); } catch(e) { cartItems = []; }
 
     if (!cartItems.length) {
       content.innerHTML = `<div style="text-align:center;padding:5rem 0;">
@@ -104,6 +199,8 @@
 
     content.innerHTML = `
       <div class="cart-page-layout">
+
+        <!-- Lista de autos -->
         <div class="cart-page-items">
           <div class="cart-page-header">
             <h2>MI CARRITO</h2>
@@ -114,8 +211,10 @@
               const p   = item.producto || item;
               const pid = item.producto_id || item.id;
               return `<div class="cart-page-item" id="item-${pid}">
-                <img src="${p.imagen_principal ? (p.imagen_principal.startsWith('http') ? p.imagen_principal : '../' + p.imagen_principal) : ''}" alt="${p.nombre}"
-                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'75\\' fill=\\'%23242424\\'%3E%3Crect width=\\'100%25\\' height=\\'100%25\\'/%3E%3Ctext x=\\'50%25\\' y=\\'55%25\\' text-anchor=\\'middle\\' fill=\\'%23666\\' font-size=\\'28\\'%3E🚗%3C/text%3E%3C/svg%3E'">
+                <img src="${p.imagen_principal
+                  ? (p.imagen_principal.startsWith('http') ? p.imagen_principal : '../' + p.imagen_principal)
+                  : ''}" alt="${p.nombre}"
+                  onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'75\\' fill=\\'%23242424\\'%3E%3Crect width=\\'100%25\\' height=\\'100%25\\'/%3E%3Ctext x=\\'50%25\\' y=\\'55%25\\' text-anchor=\\'middle\\' fill=\\'%23666\\' font-size=\\'28\\'%3E🚗%3C/text%3E%3C/svg%3E'">
                 <div class="cart-page-item-info">
                   <div class="cart-page-item-marca">${p.marca || ''} · ${p.anio || ''}</div>
                   <div class="cart-page-item-nombre">${p.nombre}</div>
@@ -127,131 +226,232 @@
           </div>
         </div>
 
+        <!-- Resumen + formulario -->
         <div class="order-summary">
           <h3>RESUMEN</h3>
-          <div class="summary-row"><span class="label">Subtotal (${cartItems.length} auto${cartItems.length>1?'s':''})</span><span>$${subtotal.toLocaleString('es-MX')}</span></div>
-          <div class="summary-row"><span class="label">IVA (16%)</span><span>$${iva.toLocaleString('es-MX',{maximumFractionDigits:0})}</span></div>
-          <div class="summary-row"><span class="label">Envío / Entrega</span><span style="color:var(--green)">Gratis</span></div>
-          <div class="summary-row total"><span class="label">Total</span><span class="amount">$${total.toLocaleString('es-MX',{maximumFractionDigits:0})}</span></div>
+          <div class="summary-row">
+            <span class="label">Subtotal (${cartItems.length} auto${cartItems.length>1?'s':''})</span>
+            <span>$${subtotal.toLocaleString('es-MX')}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">IVA (16%)</span>
+            <span>$${iva.toLocaleString('es-MX',{maximumFractionDigits:0})}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Envío / Entrega</span>
+            <span style="color:var(--green)">Gratis</span>
+          </div>
+          <div class="summary-row total">
+            <span class="label">Total</span>
+            <span class="amount">$${total.toLocaleString('es-MX',{maximumFractionDigits:0})}</span>
+          </div>
 
           ${currentUser ? `
+            <!-- Dirección de entrega -->
             <div class="checkout-section">
               <h4>📍 Datos de Entrega</h4>
-              <div class="form-group"><label>Dirección</label><input type="text" id="ch-dir" placeholder="Calle, número, colonia"/></div>
-              <div class="form-row" style="gap:.5rem">
-                <div class="form-group"><label>Ciudad</label><input type="text" id="ch-ciudad" placeholder="Ciudad"/></div>
-                <div class="form-group"><label>CP</label><input type="text" id="ch-cp" placeholder="00000"/></div>
-              </div>
-            </div>
-            <div class="checkout-section">
-              <h4>💳 Datos de Pago</h4>
               <div class="form-group">
-                <label>Número de Tarjeta</label>
-                <input type="text" id="ch-card" placeholder="1234 5678 9012 3456" maxlength="19"
-                  oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/(.{4})/g,'$1 ').trim().substring(0,19)"/>
+                <label>Dirección</label>
+                <input type="text" id="ch-dir" placeholder="Calle, número, colonia"/>
               </div>
-              <div class="form-row" style="gap:.5rem">
+              <div class="form-row-2">
                 <div class="form-group">
-                  <label>Titular</label>
-                  <input type="text" id="ch-titular" placeholder="Nombre en la tarjeta"/>
+                  <label>Ciudad</label>
+                  <input type="text" id="ch-ciudad" placeholder="Ciudad"/>
+                </div>
+                <div class="form-group">
+                  <label>CP</label>
+                  <input type="text" id="ch-cp" placeholder="00000"/>
                 </div>
               </div>
-              <div class="form-row" style="gap:.5rem">
+            </div>
+
+            <!-- Pago con Stripe Elements (campos reales en tu página) -->
+            <div class="checkout-section">
+              <h4>💳 Datos de Pago</h4>
+
+              <div class="form-group">
+                <label>Número de Tarjeta</label>
+                <div class="stripe-element-wrapper" id="wrap-number">
+                  <div id="card-number-element"></div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Titular de la Tarjeta</label>
+                <input type="text" id="ch-titular" placeholder="Nombre en la tarjeta"/>
+              </div>
+
+              <div class="form-row-2">
                 <div class="form-group">
                   <label>Vencimiento</label>
-                  <input type="text" id="ch-expiry" placeholder="MM/AA" maxlength="5"
-                    oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>=2)v=v.slice(0,2)+'/'+v.slice(2);this.value=v;"/>
+                  <div class="stripe-element-wrapper" id="wrap-expiry">
+                    <div id="card-expiry-element"></div>
+                  </div>
                 </div>
                 <div class="form-group">
                   <label>CVV</label>
-                  <input type="password" id="ch-cvv" placeholder="123" maxlength="4"
-                    oninput="this.value=this.value.replace(/[^0-9]/g,'')"/>
+                  <div class="stripe-element-wrapper" id="wrap-cvc">
+                    <div id="card-cvc-element"></div>
+                  </div>
                 </div>
               </div>
-              <div style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);padding:.75rem;margin-top:.5rem;font-size:.78rem;color:var(--gray);">
-                🔒 Pago simulado — no se realizan cargos reales
-              </div>
-              <div id="checkout-msg" style="margin-top:.75rem;"></div>
-              <button class="btn-primary" style="width:100%;justify-content:center;margin-top:.75rem;font-size:1rem;padding:1rem;" onclick="finalizarCompra()">
-                Confirmar y Pagar →
+
+              <div id="stripe-error"></div>
+
+              <button class="btn-pagar" id="btn-pagar" onclick="procesarPago()">
+                CONFIRMAR Y PAGAR →
               </button>
+              <div class="secure-badge">🔒 Pago seguro · Procesado por Stripe</div>
             </div>
           ` : `
             <div class="checkout-section">
-              <p style="color:var(--gray);font-size:.88rem;text-align:center;margin-bottom:1rem;">Inicia sesión para finalizar tu compra</p>
-              <a href="../index.html" class="btn-primary" style="width:100%;justify-content:center;display:flex;">Iniciar Sesión →</a>
+              <p style="color:var(--gray);font-size:.88rem;text-align:center;margin-bottom:1rem;">
+                Inicia sesión para finalizar tu compra
+              </p>
+              <a href="../index.html" class="btn-primary" style="width:100%;justify-content:center;display:flex;">
+                Iniciar Sesión →
+              </a>
             </div>
           `}
         </div>
       </div>`;
+
+    // Montar Stripe Elements cuando el usuario está logueado
+    if (currentUser) mountStripeElements();
   }
 
-  async function removeItem(id) { await Cart.removeItem(id); await Cart.updateBadge(); await renderCartPage(); }
+  // ── STRIPE ELEMENTS ───────────────────────────────────────────────
+  function mountStripeElements() {
+    stripe = Stripe(STRIPE_PK);
+    const elements = stripe.elements();
 
-  async function clearCart() {
-    if (!confirm('¿Vaciar el carrito?')) return;
-    await Cart.clearCart(); await Cart.updateBadge(); await renderCartPage();
+    const style = {
+      base: {
+        color: '#ffffff',
+        fontFamily: 'Segoe UI, Inter, sans-serif',
+        fontSize: '14px',
+        '::placeholder': { color: '#555555' },
+        iconColor: '#c9a84c',
+      },
+      invalid: { color: '#e74c3c', iconColor: '#e74c3c' }
+    };
+
+    cardNumber = elements.create('cardNumber', { style, showIcon: true });
+    cardExpiry = elements.create('cardExpiry', { style });
+    cardCvc    = elements.create('cardCvc',    { style });
+
+    cardNumber.mount('#card-number-element');
+    cardExpiry.mount('#card-expiry-element');
+    cardCvc.mount('#card-cvc-element');
+
+    // Borde dorado al enfocar, rojo si hay error
+    const campos = [
+      { el: cardNumber, wrap: 'wrap-number' },
+      { el: cardExpiry, wrap: 'wrap-expiry' },
+      { el: cardCvc,    wrap: 'wrap-cvc'    },
+    ];
+    campos.forEach(({ el, wrap }) => {
+      el.on('focus', () => document.getElementById(wrap)?.classList.add('focused'));
+      el.on('blur',  () => document.getElementById(wrap)?.classList.remove('focused'));
+      el.on('change', e => {
+        const errEl = document.getElementById('stripe-error');
+        if (e.error) {
+          errEl.textContent = e.error.message;
+          errEl.classList.add('visible');
+        } else {
+          errEl.classList.remove('visible');
+        }
+      });
+    });
   }
 
-  async function finalizarCompra() {
-    const dir     = document.getElementById('ch-dir')?.value?.trim() || '';
-    const ciudad  = document.getElementById('ch-ciudad')?.value?.trim() || '';
-    const cp      = document.getElementById('ch-cp')?.value?.trim() || '';
-    const card    = (document.getElementById('ch-card')?.value || '').replace(/\s/g,'');
+  // ── PROCESAR PAGO ─────────────────────────────────────────────────
+  async function procesarPago() {
+    const dir     = document.getElementById('ch-dir')?.value?.trim()     || '';
+    const ciudad  = document.getElementById('ch-ciudad')?.value?.trim()  || '';
+    const cp      = document.getElementById('ch-cp')?.value?.trim()      || '';
     const titular = document.getElementById('ch-titular')?.value?.trim() || '';
-    const expiry  = document.getElementById('ch-expiry')?.value?.trim() || '';
-    const cvv     = document.getElementById('ch-cvv')?.value?.trim() || '';
-    const msgEl   = document.getElementById('checkout-msg');
+    const errEl   = document.getElementById('stripe-error');
+    const btnEl   = document.getElementById('btn-pagar');
 
+    // Validar dirección y titular
     if (!dir || !ciudad) {
-      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Por favor completa la dirección de entrega.</div>';
-      return;
-    }
-    if (card.length < 16) {
-      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Número de tarjeta inválido (16 dígitos).</div>';
+      errEl.textContent = '⚠️ Por favor completa la dirección de entrega.';
+      errEl.classList.add('visible');
       return;
     }
     if (!titular) {
-      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Ingresa el nombre del titular.</div>';
+      errEl.textContent = '⚠️ Ingresa el nombre del titular de la tarjeta.';
+      errEl.classList.add('visible');
       return;
     }
-    if (expiry.length < 5) {
-      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Fecha de vencimiento inválida.</div>';
-      return;
-    }
-    if (cvv.length < 3) {
-      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ CVV inválido.</div>';
-      return;
-    }
+    errEl.classList.remove('visible');
 
-    msgEl.innerHTML = '<div style="color:var(--gold);font-size:.85rem;padding:.5rem 0;">⏳ Procesando pago...</div>';
-
-    // Simulate payment processing delay
-    await new Promise(r => setTimeout(r, 1500));
+    // UI: loading
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<div class="btn-spinner"></div> Procesando...';
 
     try {
-      const pedido = await Pedidos.crear(currentUser.id, cartItems, {
-        direccion_entrega: dir, ciudad_entrega: ciudad, cp_entrega: cp
+      // 1. Sesión de Supabase
+      const { data: { session } } = await supabaseClient.auth.getSession();
+
+      // 2. Total en centavos (Stripe requiere centavos)
+      const subtotal    = Cart.calcTotal(cartItems);
+      const totalCentavos = Math.round(subtotal * 1.16 * 100);
+
+      // 3. Crear PaymentIntent en Supabase Edge Function
+      const resp = await fetch(EDGE_FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        SUPABASE_ANON_KEY,
+          ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` })
+        },
+        body: JSON.stringify({ amount: totalCentavos, currency: 'mxn' })
       });
-      await Cart.updateBadge();
-      window.location.href = `mis-pedidos.html?nuevo=${pedido.numero_pedido}`;
+
+      const { client_secret, error: edgeError } = await resp.json();
+      if (edgeError) throw new Error(edgeError);
+
+      // 4. Confirmar pago con Stripe.js — sin salir de la página
+      const { paymentIntent, error: stripeError } = await stripe.confirmCardPayment(client_secret, {
+        payment_method: {
+          card: cardNumber,
+          billing_details: { name: titular }
+        }
+      });
+
+      if (stripeError) throw new Error(stripeError.message);
+
+      if (paymentIntent.status === 'succeeded') {
+        // 5. Crear pedido en Supabase
+        const pedido = await Pedidos.crear(currentUser.id, cartItems, {
+          direccion_entrega:  dir,
+          ciudad_entrega:     ciudad,
+          cp_entrega:         cp,
+          stripe_payment_id:  paymentIntent.id
+        });
+
+        await Cart.clearCart();
+        await Cart.updateBadge();
+
+        // 6. Mostrar éxito sin redirección
+        document.getElementById('overlay-pedido-num').textContent =
+          pedido?.numero_pedido ? `Pedido: ${pedido.numero_pedido}` : '';
+        document.getElementById('pago-exitoso-overlay').classList.add('active');
+      }
+
     } catch (err) {
-      msgEl.innerHTML = `<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Error: ${err.message}</div>`;
+      console.error('❌ Error pago:', err);
+      errEl.textContent = '⚠️ ' + err.message;
+      errEl.classList.add('visible');
+      btnEl.disabled = false;
+      btnEl.innerHTML = 'CONFIRMAR Y PAGAR →';
     }
   }
 
-  async function doLogout() {
-    try { await supabaseClient.auth.signOut(); } catch(e) {}
-    try { localStorage.clear(); } catch(e) {}
-    try { sessionStorage.clear(); } catch(e) {}
-    window.location.replace('../index.html');
-  }
-
-  function toggleUserMenu(e) {
-    e.stopPropagation();
-    const menu = document.getElementById('userMenu');
-    if (menu) menu.classList.toggle('open');
-  }
-</script>
-</body>
-</html>
+  // ── CARRITO ───────────────────────────────────────────────────────
+  async function removeItem(id) {
+    await Cart.removeItem(id);
+    await Cart.updateBadge(
