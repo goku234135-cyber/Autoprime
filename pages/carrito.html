@@ -451,7 +451,17 @@
     }
   }
 
-  // ── CARRITO ───────────────────────────────────────────────────────
+ // ── CARRITO ───────────────────────────────────────────────────────
   async function removeItem(id) {
     await Cart.removeItem(id);
-    await Cart.updateBadge(
+    await Cart.updateBadge();
+    await renderCartPage();
+  }
+
+  async function clearCart() {
+    await Cart.clearCart();
+    await renderCartPage();
+  }
+</script>
+</body>
+</html>
