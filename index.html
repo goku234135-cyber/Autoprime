@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AutoPrime — Autos de Lujo</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+  <style>
+    .hero {
+      min-height: calc(100vh - 70px);
+      display: flex; align-items: center;
+      position: relative; overflow: hidden;
+      background: radial-gradient(ellipse at 70% 50%, rgba(201,168,76,0.08) 0%, transparent 60%), var(--black);
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: url('images/cars/hero-bg.jpg') center/cover no-repeat;
+      opacity: 0.12;
+    }
+    .hero-content { position: relative; z-index: 1; max-width: 700px; }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: .75rem;
+      font-size: .75rem; font-weight: 600; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--gold); margin-bottom: 1.5rem;
+    }
+    .hero-eyebrow::before { content: ''; width: 40px; height: 1px; background: var(--gold); }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(3.5rem, 8vw, 7rem);
+      line-height: .9; letter-spacing: 3px; margin-bottom: 1.5rem;
+    }
+    .hero h1 .line2 { color: var(--gold); }
+    .hero-desc { font-size: 1.05rem; color: var(--gray-light); max-width: 480px; margin-bottom: 2.5rem; line-height: 1.7; }
+    .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .hero-stats { position: absolute; right: 4rem; bottom: 3rem; display: flex; gap: 3rem; }
+    .stat { text-align: center; }
+    .stat-num { font-family: var(--font-display); font-size: 2.5rem; color: var(--gold); letter-spacing: 2px; }
+    .stat-label { font-size: .7rem; color: var(--gray); letter-spacing: 2px; text-transform: uppercase; }
+    .section { padding: 5rem 0; }
+    .section-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 3rem; gap: 1rem; flex-wrap: wrap; }
+    .filter-bar { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 2rem; }
+    .filter-btn {
+      background: var(--dark2); border: 1px solid rgba(255,255,255,0.1);
+      color: var(--gray-light); padding: .5rem 1.25rem; border-radius: 30px;
+      font-size: .8rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; transition: var(--transition);
+    }
+    .filter-btn:hover, .filter-btn.active { background: var(--gold); border-color: var(--gold); color: var(--black); }
+    .promo-banner {
+      background: linear-gradient(135deg, var(--dark2), var(--dark3));
+      border: 1px solid rgba(201,168,76,0.2); border-radius: var(--radius-lg);
+      padding: 3rem; display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap; margin: 2rem 0;
+    }
+    .promo-text h2 { font-family: var(--font-display); font-size: 2.2rem; letter-spacing: 2px; margin-bottom: .5rem; }
+    .promo-text p { color: var(--gray-light); }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <a href="index.html" class="navbar-logo">AUTO<span>PRIME</span></a>
+  <ul class="navbar-links">
+    <li><a href="index.html">Inicio</a></li>
+    <li><a href="pages/catalogo.html">Catálogo</a></li>
+    <li><a href="pages/carrito.html">Carrito</a></li>
+    <li><a href="pages/mis-pedidos.html">Mis Pedidos</a></li>
+  </ul>
+  <div class="navbar-actions">
+    <button class="btn-cart" onclick="openCart()" title="Carrito">
+      🛒 <span id="cart-badge"></span>
+    </button>
+    <div id="nav-user-area"></div>
+  </div>
+</nav>
+
+<!-- CARRITO LATERAL -->
+<div class="cart-overlay" id="cartOverlay" onclick="closeCart()"></div>
+<div class="cart-drawer" id="cartDrawer">
+  <div class="cart-header">
+    <span class="cart-title">CARRITO</span>
+    <button class="btn-close-cart" onclick="closeCart()">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems">
+    <div class="cart-empty"><div class="icon">🛒</div><p>Tu carrito está vacío</p></div>
+  </div>
+  <div class="cart-footer" id="cartFooter" style="display:none">
+    <div class="cart-total-row">
+      <span class="cart-total-label">Total</span>
+      <span class="cart-total-amount" id="cartTotal">$0</span>
+    </div>
+    <a href="pages/carrito.html" class="btn-primary" style="width:100%;justify-content:center;text-align:center;display:flex;margin-bottom:.75rem;">
+      Ver Carrito Completo
+    </a>
+    <button class="btn-secondary" style="width:100%;" onclick="checkoutFromDrawer()">Finalizar Compra →</button>
+  </div>
+</div>
+
+<!-- MODAL AUTH -->
+<div class="modal-backdrop" id="authModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-logo">AUTOPRIME</div>
+      <p style="color:var(--gray);font-size:.85rem;">Tu destino de autos de lujo</p>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" onclick="switchTab('login')">Iniciar Sesión</button>
+      <button class="modal-tab" onclick="switchTab('register')">Crear Cuenta</button>
+    </div>
+    <div class="modal-body">
+      <!-- LOGIN -->
+      <div class="auth-panel active" id="panel-login">
+        <div class="auth-error" id="login-error"></div>
+        <div class="auth-success" id="login-success"></div>
+        <div class="form-group"><label>Correo Electrónico</label><input type="email" id="login-email" placeholder="tu@correo.com"/></div>
+        <div class="form-group"><label>Contraseña</label><input type="password" id="login-password" placeholder="••••••••"/></div>
+        <button class="btn-primary" style="width:100%;justify-content:center;" onclick="doLogin()">Iniciar Sesión</button>
+        <p style="text-align:center;margin-top:1rem;color:var(--gray);font-size:.85rem;">
+          ¿No tienes cuenta? <a href="#" style="color:var(--gold);" onclick="switchTab('register')">Regístrate aquí</a>
+        </p>
+      </div>
+      <!-- REGISTRO -->
+      <div class="auth-panel" id="panel-register">
+        <div class="auth-error" id="register-error"></div>
+        <div class="auth-success" id="register-success"></div>
+        <div class="form-row">
+          <div class="form-group"><label>Nombre</label><input type="text" id="reg-nombre" placeholder="Juan"/></div>
+          <div class="form-group"><label>Apellido</label><input type="text" id="reg-apellido" placeholder="García"/></div>
+        </div>
+        <div class="form-group"><label>Correo Electrónico</label><input type="email" id="reg-email" placeholder="tu@correo.com"/></div>
+        <div class="form-group"><label>Contraseña</label><input type="password" id="reg-password" placeholder="Mínimo 6 caracteres"/></div>
+        <div class="form-group"><label>Confirmar Contraseña</label><input type="password" id="reg-password2" placeholder="Repite tu contraseña"/></div>
+        <button class="btn-primary" style="width:100%;justify-content:center;" onclick="doRegister()">Crear Cuenta</button>
+        <p style="text-align:center;margin-top:1rem;color:var(--gray);font-size:.85rem;">
+          ¿Ya tienes cuenta? <a href="#" style="color:var(--gold);" onclick="switchTab('login')">Inicia sesión</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-eyebrow">Experiencia Premium</div>
+      <h1>ENCUENTRA<br><span class="line2">TU AUTO</span><br>PERFECTO</h1>
+      <p class="hero-desc">La selección más exclusiva de vehículos de lujo. Financiamiento personalizado, garantía extendida y servicio de clase mundial.</p>
+      <div class="hero-actions">
+        <a href="pages/catalogo.html" class="btn-primary">Ver Catálogo →</a>
+        <a href="#destacados" class="btn-secondary">Destacados</a>
+      </div>
+    </div>
+  </div>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">200+</div><div class="stat-label">Vehículos</div></div>
+    <div class="stat"><div class="stat-num">50+</div><div class="stat-label">Marcas</div></div>
+    <div class="stat"><div class="stat-num">10K+</div><div class="stat-label">Clientes</div></div>
+  </div>
+</section>
+
+<!-- VEHÍCULOS DESTACADOS -->
+<section class="section" id="destacados">
+  <div class="container">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">VEHÍCULOS <span>DESTACADOS</span></h2>
+        <p class="section-subtitle">Nuestra selección de autos más exclusivos del momento</p>
+      </div>
+      <a href="pages/catalogo.html" class="btn-secondary">Ver Todos →</a>
+    </div>
+    <div class="filter-bar">
+      <button class="filter-btn active" onclick="filtrar('todos', this)">Todos</button>
+      <button class="filter-btn" onclick="filtrar('sedan', this)">Sedán</button>
+      <button class="filter-btn" onclick="filtrar('suv', this)">SUV</button>
+      <button class="filter-btn" onclick="filtrar('deportivo', this)">Deportivo</button>
+      <button class="filter-btn" onclick="filtrar('electrico', this)">Eléctrico</button>
+    </div>
+    <div class="products-grid" id="productsGrid">
+      <div class="loading-spinner">Cargando vehículos...</div>
+    </div>
+  </div>
+</section>
+
+<!-- PROMO -->
+<div class="container">
+  <div class="promo-banner">
+    <div class="promo-text">
+      <h2>FINANCIAMIENTO <span style="color:var(--gold)">SIN ENGANCHE</span></h2>
+      <p>Estrena tu auto de lujo hoy. Aprobación en 24 horas, tasa preferencial.</p>
+    </div>
+    <a href="pages/catalogo.html" class="btn-primary">Solicitar Ahora →</a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">AUTOPRIME</div>
+  <p>La experiencia de lujo que mereces.</p>
+  <p style="margin-top:.5rem;">© 2025 AutoPrime. Todos los derechos reservados.</p>
+</footer>
+
+<script src="js/supabase-config.js"></script>
+<script>
+  let todosProductos = [];
+
+  // ─── Init ───────────────────────────────────────────────
+  // Escuchar cambios de auth (login, logout, refresco de token)
+  Auth.onAuthStateChange(async (event, session) => {
+    await NavHelper.init('');        // '' = estamos en raíz
+    await Cart.updateBadge();
+    if (event === 'SIGNED_IN')  closeAuthModal();
+    if (event === 'SIGNED_OUT') await Cart.updateBadge();
+  });
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    await NavHelper.init('');
+    await loadProductos();
+    await Cart.updateBadge();
+  });
+
+  // ─── Productos ──────────────────────────────────────────
+  async function loadProductos() {
+    const grid = document.getElementById('productsGrid');
+    try {
+      todosProductos = await Productos.getAll({ destacados: true });
+      renderProductos(todosProductos);
+    } catch (err) {
+      console.error('loadProductos error:', err);
+      grid.innerHTML = `<p style="color:var(--red);padding:2rem 0;">
+        Error cargando productos: ${err.message}<br>
+        <small style="color:var(--gray)">Verifica que la ANON KEY de Supabase sea correcta en js/supabase-config.js</small>
+      </p>`;
+    }
+  }
+
+  function renderProductos(lista) {
+    const grid = document.getElementById('productsGrid');
+    if (!lista.length) {
+      grid.innerHTML = '<p style="color:var(--gray);padding:2rem 0;">No hay vehículos disponibles.</p>';
+      return;
+    }
+    grid.innerHTML = lista.map(p => `
+      <div class="producto-card">
+        ${p.precio_anterior ? '<span class="producto-card-badge">Oferta</span>' : ''}
+        ${p.imagen_principal
+          ? `<img src="${p.imagen_principal}" alt="${p.nombre}" class="producto-card-img"
+               onerror="this.outerHTML='<div class=\\'producto-card-img-placeholder\\'><span>🚗</span><p>${p.marca}</p></div>'">`
+          : `<div class="producto-card-img-placeholder"><span>🚗</span><p>${p.marca}</p></div>`}
+        <div class="producto-card-body">
+          <div class="producto-card-marca">${p.marca} · ${p.anio}</div>
+          <div class="producto-card-nombre">${p.nombre}</div>
+          <div class="producto-card-specs">
+            <span class="spec-tag">⚙️ ${p.transmision || 'Automático'}</span>
+            <span class="spec-tag">⛽ ${p.combustible || 'Gasolina'}</span>
+            ${p.categoria ? `<span class="spec-tag">🏷️ ${p.categoria}</span>` : ''}
+          </div>
+          <div class="producto-card-precio">
+            <span class="precio-actual">$${Number(p.precio).toLocaleString('es-MX')}</span>
+            ${p.precio_anterior ? `<span class="precio-anterior">$${Number(p.precio_anterior).toLocaleString('es-MX')}</span>` : ''}
+          </div>
+          <div class="producto-card-actions">
+            <button class="btn-primary" onclick='addToCart(${JSON.stringify(p).replace(/'/g,"&#39;")})'>🛒 Agregar</button>
+            <a href="pages/catalogo.html" class="btn-secondary" style="padding:.85rem 1rem;">Ver →</a>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function filtrar(cat, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if (cat === 'todos') return renderProductos(todosProductos);
+    if (cat === 'electrico')
+      return renderProductos(todosProductos.filter(p => norm(p.combustible).includes('electrico')));
+    renderProductos(todosProductos.filter(p => norm(p.categoria) === cat));
+  }
+
+  // ─── Carrito lateral ────────────────────────────────────
+  function openCart()  { document.getElementById('cartDrawer').classList.add('open'); document.getElementById('cartOverlay').classList.add('open'); renderCartDrawer(); }
+  function closeCart() { document.getElementById('cartDrawer').classList.remove('open'); document.getElementById('cartOverlay').classList.remove('open'); }
+
+  async function renderCartDrawer() {
+    const container = document.getElementById('cartItems');
+    const footer    = document.getElementById('cartFooter');
+    container.innerHTML = '<div class="loading-spinner" style="padding:2rem">Cargando...</div>';
+
+    const items = await Cart.getItems();
+    if (!items.length) {
+      container.innerHTML = `<div class="cart-empty"><div class="icon">🛒</div><p>Tu carrito está vacío</p>
+        <a href="pages/catalogo.html" class="btn-primary" style="margin-top:1rem;display:inline-flex;">Ver Catálogo →</a></div>`;
+      footer.style.display = 'none';
+      return;
+    }
+
+    container.innerHTML = items.map(item => {
+      const p   = item.producto || item;
+      const pid = item.producto_id || item.id;
+      return `<div class="cart-item">
+        <img src="${p.imagen_principal || ''}" alt="${p.nombre}" class="cart-item-img"
+             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'70\\' height=\\'55\\' fill=\\'%23242424\\'%3E%3Crect width=\\'100%25\\' height=\\'100%25\\'/%3E%3Ctext x=\\'50%25\\' y=\\'55%25\\' text-anchor=\\'middle\\' fill=\\'%23666\\' font-size=\\'20\\'%3E🚗%3C/text%3E%3C/svg%3E'">
+        <div class="cart-item-info">
+          <div class="cart-item-marca">${p.marca || ''}</div>
+          <div class="cart-item-nombre">${p.nombre}</div>
+          <div class="cart-item-precio">$${Number(p.precio).toLocaleString('es-MX')}</div>
+        </div>
+        <button class="btn-danger" onclick="removeFromCart('${pid}')">✕</button>
+      </div>`;
+    }).join('');
+
+    document.getElementById('cartTotal').textContent = `$${Number(Cart.calcTotal(items)).toLocaleString('es-MX')}`;
+    footer.style.display = 'block';
+  }
+
+  async function addToCart(producto) { await Cart.addItem(producto); await renderCartDrawer(); }
+  async function removeFromCart(id)  { await Cart.removeItem(id); await renderCartDrawer(); }
+
+  async function checkoutFromDrawer() {
+    const user = await Auth.getCurrentUser();
+    if (!user) { closeCart(); openAuthModal(); return; }
+    window.location.href = 'pages/carrito.html';
+  }
+
+  // ─── Modal Auth ─────────────────────────────────────────
+  function openAuthModal()  { document.getElementById('authModal').classList.add('open'); }
+  function closeAuthModal() { document.getElementById('authModal').classList.remove('open'); }
+
+  document.getElementById('authModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('authModal')) closeAuthModal();
+  });
+
+  function switchTab(tab) {
+    document.querySelectorAll('.modal-tab').forEach((t, i) =>
+      t.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register')));
+    document.querySelectorAll('.auth-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(`panel-${tab}`).classList.add('active');
+    document.querySelectorAll('.auth-error,.auth-success').forEach(el => el.classList.remove('show'));
+  }
+
+  async function doLogin() {
+    const email    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl    = document.getElementById('login-error');
+    const sucEl    = document.getElementById('login-success');
+    errEl.classList.remove('show'); sucEl.classList.remove('show');
+
+    if (!email || !password) { errEl.textContent = 'Por favor completa todos los campos.'; errEl.classList.add('show'); return; }
+
+    try {
+      await Auth.login(email, password);
+      sucEl.textContent = '¡Bienvenido de nuevo!'; sucEl.classList.add('show');
+      document.getElementById('login-email').value = '';
+      document.getElementById('login-password').value = '';
+      // closeAuthModal() se llama vía onAuthStateChange → SIGNED_IN
+    } catch (err) {
+      errEl.textContent = 'Credenciales incorrectas. Intenta de nuevo.'; errEl.classList.add('show');
+    }
+  }
+
+  async function doRegister() {
+    const nombre    = document.getElementById('reg-nombre').value.trim();
+    const apellido  = document.getElementById('reg-apellido').value.trim();
+    const email     = document.getElementById('reg-email').value.trim();
+    const password  = document.getElementById('reg-password').value;
+    const password2 = document.getElementById('reg-password2').value;
+    const errEl     = document.getElementById('register-error');
+    const sucEl     = document.getElementById('register-success');
+    errEl.classList.remove('show'); sucEl.classList.remove('show');
+
+    if (!nombre || !email || !password) { errEl.textContent = 'Por favor completa todos los campos.'; errEl.classList.add('show'); return; }
+    if (password !== password2) { errEl.textContent = 'Las contraseñas no coinciden.'; errEl.classList.add('show'); return; }
+    if (password.length < 6)   { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.classList.add('show'); return; }
+
+    try {
+      await Auth.register(nombre.trim(), apellido.trim(), email, password);
+      sucEl.textContent = '¡Cuenta creada! Revisa tu correo para confirmar.'; sucEl.classList.add('show');
+    } catch (err) {
+      errEl.textContent = err.message || 'Error al registrar. Intenta de nuevo.'; errEl.classList.add('show');
+    }
+  }
+
+  async function doLogout() {
+    try { await Auth.logout(); } catch(e) {}
+    // Actualizar nav inmediatamente
+    const area = document.getElementById('nav-user-area');
+    if (area) area.innerHTML = '<button class="btn-primary" onclick="openAuthModal()">Iniciar Sesión</button>';
+    const badge = document.getElementById('cart-badge');
+    if (badge) { badge.textContent = '0'; badge.style.display = 'none'; }
+    const menu = document.getElementById('userMenu');
+    if (menu) menu.classList.remove('open');
+    // Recargar productos sin usuario
+    await loadProductos();
+    closeAuthModal();
+  }
+
+  function toggleUserMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('userMenu');
+    if (menu) menu.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

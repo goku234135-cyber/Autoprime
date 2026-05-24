@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mis Pedidos — AutoPrime</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+  <style>
+    .pedidos-page { padding: 3rem 0; min-height: 70vh; }
+
+    .pedido-card {
+      background: var(--dark2);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: var(--radius-lg);
+      margin-bottom: 1.25rem;
+      overflow: hidden;
+    }
+
+    .pedido-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .pedido-numero {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      letter-spacing: 2px;
+      color: var(--gold);
+    }
+
+    .pedido-fecha { font-size: 0.82rem; color: var(--gray); }
+
+    .status-badge {
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .status-pendiente { background: rgba(255,165,0,0.2); color: orange; }
+    .status-confirmado { background: rgba(46,204,113,0.2); color: var(--green); }
+    .status-cancelado { background: rgba(224,53,53,0.2); color: var(--red); }
+    .status-entregado { background: rgba(52,152,219,0.2); color: #3498db; }
+    .status-en_proceso { background: rgba(155,89,182,0.2); color: #9b59b6; }
+    .status-enviado { background: rgba(52,152,219,0.15); color: #5dade2; }
+
+    .pedido-body { padding: 1.25rem 1.5rem; }
+
+    .pedido-item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.9rem;
+    }
+    .pedido-item-row:last-child { border: none; }
+
+    .pedido-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      background: rgba(201,168,76,0.05);
+      border-top: 1px solid rgba(201,168,76,0.15);
+    }
+    .pedido-total-label { font-size: 0.85rem; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; }
+    .pedido-total-amount { font-family: var(--font-display); font-size: 1.4rem; color: var(--gold); }
+
+    .nuevo-pedido-banner {
+      background: linear-gradient(135deg, rgba(46,204,113,0.15), rgba(46,204,113,0.05));
+      border: 1px solid rgba(46,204,113,0.3);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .nuevo-pedido-banner h3 { color: var(--green); font-family: var(--font-display); font-size:1.5rem; letter-spacing:2px; }
+    .nuevo-pedido-banner p { color: var(--gray-light); margin-top:0.5rem; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="../index.html" class="navbar-logo">AUTO<span>PRIME</span></a>
+  <ul class="navbar-links">
+    <li><a href="../index.html">Inicio</a></li>
+    <li><a href="catalogo.html">Catálogo</a></li>
+    <li><a href="carrito.html">Carrito</a></li>
+    <li><a href="mis-pedidos.html">Mis Pedidos</a></li>
+  </ul>
+  <div class="navbar-actions">
+    <button class="btn-cart" onclick="location.href='carrito.html'" title="Carrito">
+      🛒 <span id="cart-badge"></span>
+    </button>
+    <div id="nav-user-area"></div>
+  </div>
+</nav>
+
+<div class="container pedidos-page">
+  <div class="section-header" style="margin-bottom:2rem;">
+    <div>
+      <h1 class="section-title">MIS <span>PEDIDOS</span></h1>
+      <p class="section-subtitle">Historial de tus compras</p>
+    </div>
+    <a href="catalogo.html" class="btn-secondary">Seguir Comprando →</a>
+  </div>
+
+  <div id="pedidos-content">
+    <div class="loading-spinner">Cargando pedidos...</div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-logo">AUTOPRIME</div>
+  <p>© 2025 AutoPrime. Todos los derechos reservados.</p>
+</footer>
+
+<script src="../js/supabase-config.js"></script>
+<script>
+  Auth.onAuthStateChange(async (event, session) => {
+    const user = await Auth.getCurrentUser();
+    await NavHelper.init('../');
+    await Cart.updateBadge();
+    if (user) await renderPedidos(user.id);
+    else showLoginRequired();
+  });
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const user = await Auth.getCurrentUser();
+    await NavHelper.init('../');
+    await Cart.updateBadge();
+
+    if (!user) {
+      showLoginRequired();
+      return;
+    }
+
+    await renderPedidos(user.id);
+  });
+
+  function showLoginRequired() {
+    document.getElementById('pedidos-content').innerHTML = `
+      <div style="text-align:center; padding:4rem 0;">
+        <p style="color:var(--gray); margin-bottom:1.5rem; font-size:1.1rem;">Inicia sesión para ver tus pedidos</p>
+        <a href="../index.html" class="btn-primary">Iniciar Sesión →</a>
+      </div>`;
+  }
+
+  async function renderPedidos(userId) {
+    const content = document.getElementById('pedidos-content');
+
+    const params = new URLSearchParams(location.search);
+    const nuevoPedido = params.get('nuevo');
+
+    let html = '';
+
+    if (nuevoPedido) {
+      html += `
+        <div class="nuevo-pedido-banner">
+          <h3>✓ ¡PEDIDO CONFIRMADO!</h3>
+          <p>Tu pedido <strong style="color:var(--gold)">${nuevoPedido}</strong> ha sido recibido y está siendo procesado.</p>
+        </div>`;
+      history.replaceState({}, '', 'mis-pedidos.html');
+    }
+
+    try {
+      const pedidos = await Pedidos.getMisPedidos(userId);
+
+      if (!pedidos.length) {
+        html += `
+          <div style="text-align:center; padding:4rem 0;">
+            <div style="font-size:3rem; margin-bottom:1rem;">📦</div>
+            <h3 style="font-family:var(--font-display); font-size:1.8rem; letter-spacing:2px; margin-bottom:0.75rem;">SIN PEDIDOS AÚN</h3>
+            <p style="color:var(--gray); margin-bottom:2rem;">¡Explora nuestro catálogo y realiza tu primera compra!</p>
+            <a href="catalogo.html" class="btn-primary">Ir al Catálogo →</a>
+          </div>`;
+      } else {
+        const statusLabels = {
+          pendiente: 'Pendiente',
+          confirmado: 'Confirmado',
+          en_proceso: 'En Proceso',
+          enviado: 'Enviado',
+          entregado: 'Entregado',
+          cancelado: 'Cancelado'
+        };
+
+        html += pedidos.map(pedido => {
+          const fecha = new Date(pedido.created_at).toLocaleDateString('es-MX', {
+            year: 'numeric', month: 'long', day: 'numeric'
+          });
+          // FIX: clase CSS para status con guión bajo (en_proceso) manejada correctamente
+          const statusClass = `status-${pedido.estado}`;
+          const statusLabel = statusLabels[pedido.estado] || pedido.estado;
+
+          return `
+            <div class="pedido-card">
+              <div class="pedido-header">
+                <div>
+                  <div class="pedido-numero">${pedido.numero_pedido}</div>
+                  <div class="pedido-fecha">${fecha}</div>
+                </div>
+                <span class="status-badge ${statusClass}">${statusLabel}</span>
+              </div>
+              <div class="pedido-body">
+                ${(pedido.pedido_items || []).map(item => `
+                  <div class="pedido-item-row">
+                    <span>${item.nombre_producto}</span>
+                    <span style="color:var(--gray)">×${item.cantidad}</span>
+                    <span>$${Number(item.precio_unitario).toLocaleString('es-MX')}</span>
+                  </div>
+                `).join('')}
+                ${pedido.direccion_entrega ? `
+                  <p style="color:var(--gray); font-size:0.82rem; margin-top:0.75rem;">
+                    📍 ${pedido.direccion_entrega}, ${pedido.ciudad_entrega}
+                  </p>` : ''}
+              </div>
+              <div class="pedido-total-row">
+                <span class="pedido-total-label">Total del pedido</span>
+                <span class="pedido-total-amount">$${Number(pedido.total).toLocaleString('es-MX', {maximumFractionDigits:0})}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    } catch (err) {
+      html += `<div class="alert alert-error">Error al cargar pedidos: ${err.message}</div>`;
+    }
+
+    content.innerHTML = html;
+  }
+
+  async function doLogout() {
+    try { await supabaseClient.auth.signOut(); } catch(e) {}
+    try { localStorage.clear(); } catch(e) {}
+    try { sessionStorage.clear(); } catch(e) {}
+    window.location.replace('../index.html');
+  }
+
+  function toggleUserMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('userMenu');
+    if (menu) menu.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

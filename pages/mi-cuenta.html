@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mi Cuenta — AutoPrime</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+  <style>
+    .account-page { padding: 3rem 0; min-height: 70vh; }
+
+    .account-grid {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 2rem;
+    }
+
+    .account-sidebar {
+      background: var(--dark2);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      height: fit-content;
+      position: sticky;
+      top: 90px;
+    }
+
+    .account-sidebar-header {
+      padding: 1.5rem;
+      background: linear-gradient(135deg, rgba(201,168,76,0.1), transparent);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      text-align: center;
+    }
+
+    .account-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      margin: 0 auto 0.75rem;
+    }
+
+    .account-name { font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem; }
+    .account-email { font-size: 0.78rem; color: var(--gray); }
+
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.25rem;
+      font-size: 0.88rem;
+      color: var(--gray-light);
+      border-left: 3px solid transparent;
+      transition: var(--transition);
+    }
+    .sidebar-nav a:hover,
+    .sidebar-nav a.active {
+      color: var(--gold);
+      border-left-color: var(--gold);
+      background: rgba(201,168,76,0.06);
+    }
+
+    .account-card {
+      background: var(--dark2);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .account-card-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .account-card-header h3 {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      letter-spacing: 2px;
+      color: var(--gold);
+    }
+
+    .account-card-body { padding: 1.5rem; }
+
+    @media (max-width: 768px) {
+      .account-grid { grid-template-columns: 1fr; }
+      .account-sidebar { position: static; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="../index.html" class="navbar-logo">AUTO<span>PRIME</span></a>
+  <ul class="navbar-links">
+    <li><a href="../index.html">Inicio</a></li>
+    <li><a href="catalogo.html">Catálogo</a></li>
+    <li><a href="carrito.html">Carrito</a></li>
+    <li><a href="mis-pedidos.html">Mis Pedidos</a></li>
+  </ul>
+  <div class="navbar-actions">
+    <button class="btn-cart" onclick="location.href='carrito.html'">🛒 <span id="cart-badge"></span></button>
+    <div id="nav-user-area"></div>
+  </div>
+</nav>
+
+<div class="container account-page">
+  <div id="account-content">
+    <div class="loading-spinner">Cargando...</div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-logo">AUTOPRIME</div>
+  <p>© 2025 AutoPrime. Todos los derechos reservados.</p>
+</footer>
+
+<script src="../js/supabase-config.js"></script>
+<script>
+  let currentUser = null;
+  let currentProfile = null;
+
+  Auth.onAuthStateChange(async (event) => {
+    currentUser = await Auth.getCurrentUser();
+    if (currentUser) {
+      currentProfile = await Profile.get(currentUser.id).catch(() => ({}));
+      renderAccount();
+      await NavHelper.init('../');
+    } else {
+      showLoginRequired();
+    }
+    await Cart.updateBadge();
+  });
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    currentUser = await Auth.getCurrentUser();
+    await Cart.updateBadge();
+
+    if (!currentUser) {
+      showLoginRequired();
+      return;
+    }
+
+    currentProfile = await Profile.get(currentUser.id).catch(() => ({}));
+    renderAccount();
+    await NavHelper.init('../');
+  });
+
+  function showLoginRequired() {
+    document.getElementById('account-content').innerHTML = `
+      <div style="text-align:center; padding:4rem 0;">
+        <p style="color:var(--gray); margin-bottom:1.5rem;">Inicia sesión para acceder a tu cuenta</p>
+        <a href="../index.html" class="btn-primary">Iniciar Sesión →</a>
+      </div>`;
+  }
+
+  function renderAccount() {
+    if (!currentUser) return;
+    const nombre = currentProfile?.nombre || '';
+    const apellido = currentProfile?.apellido || '';
+    const displayName = `${nombre} ${apellido}`.trim() || currentUser.email.split('@')[0];
+
+    document.getElementById('account-content').innerHTML = `
+      <div class="account-grid">
+        <!-- SIDEBAR -->
+        <aside class="account-sidebar">
+          <div class="account-sidebar-header">
+            <div class="account-avatar">👤</div>
+            <div class="account-name">${displayName}</div>
+            <div class="account-email">${currentUser.email}</div>
+          </div>
+          <nav class="sidebar-nav">
+            <a href="mi-cuenta.html" class="active">👤 Mi Perfil</a>
+            <a href="mis-pedidos.html">📦 Mis Pedidos</a>
+            <a href="carrito.html">🛒 Mi Carrito</a>
+            <a href="catalogo.html">🚗 Catálogo</a>
+          </nav>
+        </aside>
+
+        <!-- CONTENIDO -->
+        <div>
+          <div class="account-card">
+            <div class="account-card-header">
+              <h3>INFORMACIÓN PERSONAL</h3>
+            </div>
+            <div class="account-card-body">
+              <div id="profile-msg"></div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nombre</label>
+                  <input type="text" id="p-nombre" value="${currentProfile?.nombre || ''}" placeholder="Tu nombre"/>
+                </div>
+                <div class="form-group">
+                  <label>Apellido</label>
+                  <input type="text" id="p-apellido" value="${currentProfile?.apellido || ''}" placeholder="Tu apellido"/>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Correo Electrónico</label>
+                <input type="email" value="${currentUser.email}" disabled style="opacity:0.5; cursor:not-allowed;"/>
+              </div>
+
+              <div class="form-group">
+                <label>Teléfono</label>
+                <input type="tel" id="p-telefono" value="${currentProfile?.telefono || ''}" placeholder="+52 55 1234 5678"/>
+              </div>
+
+              <div class="form-group">
+                <label>Dirección</label>
+                <input type="text" id="p-direccion" value="${currentProfile?.direccion || ''}" placeholder="Calle, número, colonia"/>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Ciudad</label>
+                  <input type="text" id="p-ciudad" value="${currentProfile?.ciudad || ''}" placeholder="Ciudad"/>
+                </div>
+                <div class="form-group">
+                  <label>CP</label>
+                  <input type="text" id="p-cp" value="${currentProfile?.cp || ''}" placeholder="00000"/>
+                </div>
+              </div>
+
+              <button class="btn-primary" onclick="saveProfile()">Guardar Cambios</button>
+            </div>
+          </div>
+
+          <!-- Seguridad -->
+          <div class="account-card" style="margin-top:1.5rem;">
+            <div class="account-card-header">
+              <h3>SEGURIDAD</h3>
+            </div>
+            <div class="account-card-body">
+              <p style="color:var(--gray); font-size:0.88rem; margin-bottom:1rem;">
+                Miembro desde: ${new Date(currentUser.created_at).toLocaleDateString('es-MX', {year:'numeric',month:'long',day:'numeric'})}
+              </p>
+              <!-- FIX: Botón Cerrar Sesión claramente visible en Mi Cuenta -->
+              <button class="btn-danger" onclick="doLogout()">Cerrar Sesión</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function saveProfile() {
+    const msgEl = document.getElementById('profile-msg');
+
+    const updates = {
+      nombre: document.getElementById('p-nombre').value.trim(),
+      apellido: document.getElementById('p-apellido').value.trim(),
+      telefono: document.getElementById('p-telefono').value.trim(),
+      direccion: document.getElementById('p-direccion').value.trim(),
+      ciudad: document.getElementById('p-ciudad').value.trim(),
+      cp: document.getElementById('p-cp').value.trim()
+    };
+
+    try {
+      await Profile.update(currentUser.id, updates);
+      currentProfile = { ...currentProfile, ...updates };
+      msgEl.innerHTML = '<div class="alert alert-success">✓ Perfil actualizado correctamente.</div>';
+      setTimeout(() => msgEl.innerHTML = '', 3000);
+    } catch (err) {
+      msgEl.innerHTML = `<div class="alert alert-error">Error: ${err.message}</div>`;
+    }
+  }
+
+  async function doLogout() {
+    try { await supabaseClient.auth.signOut(); } catch(e) {}
+    try { localStorage.clear(); } catch(e) {}
+    try { sessionStorage.clear(); } catch(e) {}
+    window.location.replace('../index.html');
+  }
+
+  function toggleUserMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('userMenu');
+    if (menu) menu.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

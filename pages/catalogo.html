@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Catálogo — AutoPrime</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+  <style>
+    .catalog-hero { background: linear-gradient(to right,var(--dark),var(--dark2)); border-bottom:1px solid rgba(201,168,76,.15); padding:4rem 0 3rem; }
+    .catalog-layout { display:grid; grid-template-columns:260px 1fr; gap:2rem; padding:3rem 0; }
+    .filters-panel { background:var(--dark2); border:1px solid rgba(255,255,255,.07); border-radius:var(--radius-lg); padding:1.5rem; height:fit-content; position:sticky; top:90px; }
+    .filter-section { margin-bottom:1.5rem; }
+    .filter-section-title { font-size:.72rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:.75rem; }
+    .filter-check { display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem; cursor:pointer; }
+    .filter-check input { accent-color:var(--gold); }
+    .filter-check span { font-size:.88rem; color:var(--gray-light); }
+    .price-range { display:flex; gap:.5rem; }
+    .price-range input { flex:1; background:var(--dark3); border:1px solid rgba(255,255,255,.1); color:var(--white); padding:.5rem; border-radius:var(--radius); font-size:.85rem; font-family:var(--font-body); }
+    .catalog-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem; gap:1rem; flex-wrap:wrap; }
+    .results-count { color:var(--gray); font-size:.88rem; }
+    .results-count strong { color:var(--white); }
+    .sort-select { background:var(--dark2); border:1px solid rgba(255,255,255,.1); color:var(--white); padding:.5rem 1rem; border-radius:var(--radius); font-size:.85rem; font-family:var(--font-body); }
+    @media(max-width:900px){ .catalog-layout{grid-template-columns:1fr;} .filters-panel{position:static;} }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <a href="../index.html" class="navbar-logo">AUTO<span>PRIME</span></a>
+  <ul class="navbar-links">
+    <li><a href="../index.html">Inicio</a></li>
+    <li><a href="catalogo.html">Catálogo</a></li>
+    <li><a href="carrito.html">Carrito</a></li>
+    <li><a href="mis-pedidos.html">Mis Pedidos</a></li>
+  </ul>
+  <div class="navbar-actions">
+    <button class="btn-cart" onclick="openCartDrawer()" title="Carrito">🛒 <span id="cart-badge"></span></button>
+    <div id="nav-user-area"></div>
+  </div>
+</nav>
+
+<!-- CARRITO OVERLAY -->
+<div class="cart-overlay" id="cartOverlay" onclick="closeCartDrawer()"></div>
+<div class="cart-drawer" id="cartDrawer">
+  <div class="cart-header"><span class="cart-title">CARRITO</span><button class="btn-close-cart" onclick="closeCartDrawer()">✕</button></div>
+  <div class="cart-items" id="cartItems"><div class="cart-empty"><div class="icon">🛒</div><p>Tu carrito está vacío</p></div></div>
+  <div class="cart-footer" id="cartFooter" style="display:none">
+    <div class="cart-total-row"><span class="cart-total-label">Total</span><span class="cart-total-amount" id="cartTotal">$0</span></div>
+    <a href="carrito.html" class="btn-primary" style="width:100%;justify-content:center;display:flex;margin-bottom:.75rem;">Ver Carrito</a>
+  </div>
+</div>
+
+<!-- HERO CATÁLOGO -->
+<div class="catalog-hero">
+  <div class="container">
+    <h1 class="section-title">CATÁLOGO <span>COMPLETO</span></h1>
+    <p class="section-subtitle">Explora nuestra colección de vehículos de lujo</p>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="container">
+  <div class="catalog-layout">
+    <!-- SIDEBAR -->
+    <aside class="filters-panel">
+      <div class="filter-section">
+        <div class="filter-section-title">Categoría</div>
+        <label class="filter-check"><input type="checkbox" value="sedan" onchange="applyFilters()"> <span>Sedán</span></label>
+        <label class="filter-check"><input type="checkbox" value="suv" onchange="applyFilters()"> <span>SUV</span></label>
+        <label class="filter-check"><input type="checkbox" value="deportivo" onchange="applyFilters()"> <span>Deportivo</span></label>
+        <label class="filter-check"><input type="checkbox" value="pickup" onchange="applyFilters()"> <span>Pickup</span></label>
+      </div>
+      <div class="filter-section">
+        <div class="filter-section-title">Combustible</div>
+        <label class="filter-check"><input type="checkbox" value="gasolina" data-type="combustible" onchange="applyFilters()"> <span>Gasolina</span></label>
+        <label class="filter-check"><input type="checkbox" value="electrico" data-type="combustible" onchange="applyFilters()"> <span>Eléctrico</span></label>
+        <label class="filter-check"><input type="checkbox" value="hibrido" data-type="combustible" onchange="applyFilters()"> <span>Híbrido</span></label>
+      </div>
+      <div class="filter-section">
+        <div class="filter-section-title">Precio</div>
+        <div class="price-range">
+          <input type="number" id="precioMin" placeholder="Mín" onchange="applyFilters()"/>
+          <input type="number" id="precioMax" placeholder="Máx" onchange="applyFilters()"/>
+        </div>
+      </div>
+      <button class="btn-secondary" style="width:100%;margin-top:.5rem;" onclick="resetFilters()">Limpiar Filtros</button>
+    </aside>
+
+    <!-- GRID -->
+    <div>
+      <div class="catalog-toolbar">
+        <p class="results-count" id="resultsCount">Cargando...</p>
+        <select class="sort-select" id="sortSelect" onchange="applyFilters()">
+          <option value="default">Ordenar por</option>
+          <option value="precio_asc">Precio: Menor a Mayor</option>
+          <option value="precio_desc">Precio: Mayor a Menor</option>
+          <option value="nombre">Nombre A-Z</option>
+          <option value="anio">Año (Nuevo primero)</option>
+        </select>
+      </div>
+      <div class="products-grid" id="productsGrid">
+        <div class="loading-spinner">Cargando vehículos...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-logo">AUTOPRIME</div>
+  <p>© 2025 AutoPrime. Todos los derechos reservados.</p>
+</footer>
+
+<script src="../js/supabase-config.js"></script>
+<script>
+  let allProducts = [];
+
+  Auth.onAuthStateChange(async () => {
+    await NavHelper.init('../');
+    await Cart.updateBadge();
+  });
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    await NavHelper.init('../');
+    await loadAll();
+    await Cart.updateBadge();
+  });
+
+  async function loadAll() {
+    try {
+      allProducts = await Productos.getAll();
+      renderProducts(allProducts);
+    } catch (err) {
+      console.error('loadAll error:', err);
+      document.getElementById('productsGrid').innerHTML =
+        `<p style="color:var(--red);padding:2rem 0;">Error: ${err.message}<br>
+        <small style="color:var(--gray)">Verifica la ANON KEY de Supabase en js/supabase-config.js</small></p>`;
+      document.getElementById('resultsCount').textContent = 'Error al cargar';
+    }
+  }
+
+  function renderProducts(lista) {
+    const grid = document.getElementById('productsGrid');
+    document.getElementById('resultsCount').innerHTML = `<strong>${lista.length}</strong> vehículos encontrados`;
+    if (!lista.length) {
+      grid.innerHTML = '<p style="color:var(--gray);padding:2rem 0;">No se encontraron vehículos con esos filtros.</p>';
+      return;
+    }
+    grid.innerHTML = lista.map(p => `
+      <div class="producto-card">
+        ${p.precio_anterior ? '<span class="producto-card-badge">Oferta</span>' : ''}
+        ${p.imagen_principal
+          ? `<img src="${p.imagen_principal && p.imagen_principal.startsWith('http') ? p.imagen_principal : '../' + p.imagen_principal}" alt="${p.nombre}" class="producto-card-img"
+               onerror="this.outerHTML='<div class=\\'producto-card-img-placeholder\\'><span>🚗</span><p>${p.marca}</p></div>'">`
+          : `<div class="producto-card-img-placeholder"><span>🚗</span><p>${p.marca}</p></div>`}
+        <div class="producto-card-body">
+          <div class="producto-card-marca">${p.marca} · ${p.anio}</div>
+          <div class="producto-card-nombre">${p.nombre}</div>
+          <div class="producto-card-specs">
+            <span class="spec-tag">⚙️ ${p.transmision || 'Auto'}</span>
+            <span class="spec-tag">⛽ ${p.combustible || 'Gasolina'}</span>
+          </div>
+          <div class="producto-card-precio">
+            <span class="precio-actual">$${Number(p.precio).toLocaleString('es-MX')}</span>
+            ${p.precio_anterior ? `<span class="precio-anterior">$${Number(p.precio_anterior).toLocaleString('es-MX')}</span>` : ''}
+          </div>
+          <div class="producto-card-actions">
+            <button class="btn-primary" onclick='addItem(${JSON.stringify(p).replace(/'/g,"&#39;")})'>🛒 Agregar</button>
+            <a href="carrito.html" class="btn-secondary" style="padding:.85rem 1rem;">Ver →</a>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+  function applyFilters() {
+    const cats  = [...document.querySelectorAll('input[type=checkbox]:not([data-type]):checked')].map(i => i.value);
+    const combs = [...document.querySelectorAll('input[data-type=combustible]:checked')].map(i => i.value);
+    const pMin  = parseFloat(document.getElementById('precioMin').value) || 0;
+    const pMax  = parseFloat(document.getElementById('precioMax').value) || Infinity;
+    const sort  = document.getElementById('sortSelect').value;
+
+    let f = allProducts.filter(p => {
+      if (cats.length  && !cats.some(c  => norm(p.categoria).includes(c)))   return false;
+      if (combs.length && !combs.some(c => norm(p.combustible).includes(c))) return false;
+      if (p.precio < pMin || p.precio > pMax) return false;
+      return true;
+    });
+
+    if (sort === 'precio_asc')  f.sort((a,b) => a.precio - b.precio);
+    if (sort === 'precio_desc') f.sort((a,b) => b.precio - a.precio);
+    if (sort === 'nombre')      f.sort((a,b) => a.nombre.localeCompare(b.nombre));
+    if (sort === 'anio')        f.sort((a,b) => b.anio - a.anio);
+
+    renderProducts(f);
+  }
+
+  function resetFilters() {
+    document.querySelectorAll('input[type=checkbox]').forEach(i => i.checked = false);
+    document.getElementById('precioMin').value = '';
+    document.getElementById('precioMax').value = '';
+    document.getElementById('sortSelect').value = 'default';
+    renderProducts(allProducts);
+  }
+
+  async function addItem(producto) {
+    await Cart.addItem(producto);
+    await Cart.updateBadge();
+    openCartDrawer();
+    await renderCartDrawer();
+  }
+
+  function openCartDrawer()  { document.getElementById('cartDrawer').classList.add('open'); document.getElementById('cartOverlay').classList.add('open'); renderCartDrawer(); }
+  function closeCartDrawer() { document.getElementById('cartDrawer').classList.remove('open'); document.getElementById('cartOverlay').classList.remove('open'); }
+
+  async function renderCartDrawer() {
+    const container = document.getElementById('cartItems');
+    const footer    = document.getElementById('cartFooter');
+    container.innerHTML = '<div class="loading-spinner" style="padding:2rem">Cargando...</div>';
+
+    const items = await Cart.getItems();
+    if (!items.length) {
+      container.innerHTML = `<div class="cart-empty"><div class="icon">🛒</div><p>Tu carrito está vacío</p></div>`;
+      footer.style.display = 'none';
+      return;
+    }
+
+    container.innerHTML = items.map(item => {
+      const p   = item.producto || item;
+      const pid = item.producto_id || item.id;
+      return `<div class="cart-item">
+        <img src="${p.imagen_principal || ''}" alt="${p.nombre}" class="cart-item-img"
+             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'70\\' height=\\'55\\' fill=\\'%23242424\\'%3E%3Crect width=\\'100%25\\' height=\\'100%25\\'/%3E%3Ctext x=\\'50%25\\' y=\\'55%25\\' text-anchor=\\'middle\\' fill=\\'%23666\\' font-size=\\'20\\'%3E🚗%3C/text%3E%3C/svg%3E'">
+        <div class="cart-item-info">
+          <div class="cart-item-marca">${p.marca || ''}</div>
+          <div class="cart-item-nombre">${p.nombre}</div>
+          <div class="cart-item-precio">$${Number(p.precio).toLocaleString('es-MX')}</div>
+        </div>
+        <button class="btn-danger" onclick="removeCartItem('${pid}')">✕</button>
+      </div>`;
+    }).join('');
+
+    document.getElementById('cartTotal').textContent = `$${Number(Cart.calcTotal(items)).toLocaleString('es-MX')}`;
+    footer.style.display = 'block';
+  }
+
+  async function removeCartItem(id) { await Cart.removeItem(id); await Cart.updateBadge(); await renderCartDrawer(); }
+
+  async function doLogout() {
+    try { await supabaseClient.auth.signOut(); } catch(e) {}
+    try { localStorage.clear(); } catch(e) {}
+    try { sessionStorage.clear(); } catch(e) {}
+    window.location.replace('../index.html');
+  }
+
+  function toggleUserMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('userMenu');
+    if (menu) menu.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

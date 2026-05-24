@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Carrito — AutoPrime</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+  <style>
+    .cart-page { padding:3rem 0; min-height:70vh; }
+    .cart-page-layout { display:grid; grid-template-columns:1fr 340px; gap:2rem; align-items:start; }
+    .cart-page-items { background:var(--dark2); border:1px solid rgba(255,255,255,.07); border-radius:var(--radius-lg); overflow:hidden; }
+    .cart-page-header { padding:1.25rem 1.5rem; border-bottom:1px solid rgba(255,255,255,.07); display:flex; align-items:center; justify-content:space-between; }
+    .cart-page-header h2 { font-family:var(--font-display); font-size:1.4rem; letter-spacing:2px; color:var(--gold); }
+    .cart-page-item { display:flex; gap:1.25rem; padding:1.25rem 1.5rem; border-bottom:1px solid rgba(255,255,255,.05); align-items:center; }
+    .cart-page-item:last-child { border-bottom:none; }
+    .cart-page-item img { width:100px; height:75px; object-fit:cover; border-radius:var(--radius); background:var(--dark3); flex-shrink:0; }
+    .cart-page-item-info { flex:1; }
+    .cart-page-item-marca { font-size:.72rem; color:var(--gold); letter-spacing:1.5px; text-transform:uppercase; }
+    .cart-page-item-nombre { font-size:1rem; font-weight:600; margin:.2rem 0 .5rem; }
+    .cart-page-item-precio { font-family:var(--font-display); font-size:1.2rem; color:var(--gold); }
+    .order-summary { background:var(--dark2); border:1px solid rgba(255,255,255,.07); border-radius:var(--radius-lg); padding:1.5rem; position:sticky; top:90px; }
+    .order-summary h3 { font-family:var(--font-display); font-size:1.3rem; letter-spacing:2px; color:var(--gold); margin-bottom:1.5rem; }
+    .summary-row { display:flex; justify-content:space-between; align-items:center; padding:.6rem 0; font-size:.9rem; }
+    .summary-row.total { border-top:1px solid rgba(255,255,255,.1); margin-top:.5rem; padding-top:1rem; font-weight:700; }
+    .summary-row.total .label { color:var(--white); font-size:1rem; }
+    .summary-row.total .amount { font-family:var(--font-display); font-size:1.5rem; color:var(--gold); }
+    .summary-row .label { color:var(--gray); }
+    .checkout-section { margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid rgba(255,255,255,.08); }
+    .checkout-section h4 { font-size:.75rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:1rem; }
+    .checkout-section .form-group { margin-bottom:.75rem; }
+    .checkout-section label { font-size:.75rem; }
+    .checkout-section input { padding:.7rem .85rem; font-size:.88rem; }
+    @media(max-width:900px){ .cart-page-layout{grid-template-columns:1fr;} .order-summary{position:static;} }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="../index.html" class="navbar-logo">AUTO<span>PRIME</span></a>
+  <ul class="navbar-links">
+    <li><a href="../index.html">Inicio</a></li>
+    <li><a href="catalogo.html">Catálogo</a></li>
+    <li><a href="carrito.html">Carrito</a></li>
+    <li><a href="mis-pedidos.html">Mis Pedidos</a></li>
+  </ul>
+  <div class="navbar-actions">
+    <button class="btn-cart" onclick="location.href='carrito.html'" title="Carrito">🛒 <span id="cart-badge"></span></button>
+    <div id="nav-user-area"></div>
+  </div>
+</nav>
+
+<div class="container cart-page">
+  <div id="cart-content">
+    <div class="loading-spinner" style="padding:4rem 0">Cargando carrito...</div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-logo">AUTOPRIME</div>
+  <p>© 2025 AutoPrime. Todos los derechos reservados.</p>
+</footer>
+
+<script src="../js/supabase-config.js"></script>
+<script>
+  let cartItems = [];
+  let currentUser = null;
+
+  Auth.onAuthStateChange(async () => {
+    currentUser = await Auth.getCurrentUser();
+    await NavHelper.init('../');
+    await renderCartPage();
+    await Cart.updateBadge();
+  });
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    currentUser = await Auth.getCurrentUser();
+    await NavHelper.init('../');
+    await renderCartPage();
+    await Cart.updateBadge();
+  });
+
+  async function renderCartPage() {
+    const content = document.getElementById('cart-content');
+    try {
+      cartItems = await Cart.getItems();
+    } catch(e) {
+      cartItems = [];
+    }
+
+    if (!cartItems.length) {
+      content.innerHTML = `<div style="text-align:center;padding:5rem 0;">
+        <div style="font-size:4rem;margin-bottom:1rem;">🛒</div>
+        <h2 style="font-family:var(--font-display);font-size:2rem;letter-spacing:2px;margin-bottom:.75rem;">TU CARRITO ESTÁ VACÍO</h2>
+        <p style="color:var(--gray);margin-bottom:2rem;">Explora nuestro catálogo y agrega los vehículos que te interesen</p>
+        <a href="catalogo.html" class="btn-primary">Ver Catálogo →</a>
+      </div>`;
+      return;
+    }
+
+    const subtotal = Cart.calcTotal(cartItems);
+    const iva      = subtotal * 0.16;
+    const total    = subtotal + iva;
+
+    content.innerHTML = `
+      <div class="cart-page-layout">
+        <div class="cart-page-items">
+          <div class="cart-page-header">
+            <h2>MI CARRITO</h2>
+            <button class="btn-danger" onclick="clearCart()">Vaciar carrito</button>
+          </div>
+          <div id="items-list">
+            ${cartItems.map(item => {
+              const p   = item.producto || item;
+              const pid = item.producto_id || item.id;
+              return `<div class="cart-page-item" id="item-${pid}">
+                <img src="${p.imagen_principal ? (p.imagen_principal.startsWith('http') ? p.imagen_principal : '../' + p.imagen_principal) : ''}" alt="${p.nombre}"
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'75\\' fill=\\'%23242424\\'%3E%3Crect width=\\'100%25\\' height=\\'100%25\\'/%3E%3Ctext x=\\'50%25\\' y=\\'55%25\\' text-anchor=\\'middle\\' fill=\\'%23666\\' font-size=\\'28\\'%3E🚗%3C/text%3E%3C/svg%3E'">
+                <div class="cart-page-item-info">
+                  <div class="cart-page-item-marca">${p.marca || ''} · ${p.anio || ''}</div>
+                  <div class="cart-page-item-nombre">${p.nombre}</div>
+                  <div class="cart-page-item-precio">$${Number(p.precio).toLocaleString('es-MX')}</div>
+                </div>
+                <button class="btn-danger" onclick="removeItem('${pid}')">✕ Quitar</button>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <div class="order-summary">
+          <h3>RESUMEN</h3>
+          <div class="summary-row"><span class="label">Subtotal (${cartItems.length} auto${cartItems.length>1?'s':''})</span><span>$${subtotal.toLocaleString('es-MX')}</span></div>
+          <div class="summary-row"><span class="label">IVA (16%)</span><span>$${iva.toLocaleString('es-MX',{maximumFractionDigits:0})}</span></div>
+          <div class="summary-row"><span class="label">Envío / Entrega</span><span style="color:var(--green)">Gratis</span></div>
+          <div class="summary-row total"><span class="label">Total</span><span class="amount">$${total.toLocaleString('es-MX',{maximumFractionDigits:0})}</span></div>
+
+          ${currentUser ? `
+            <div class="checkout-section">
+              <h4>📍 Datos de Entrega</h4>
+              <div class="form-group"><label>Dirección</label><input type="text" id="ch-dir" placeholder="Calle, número, colonia"/></div>
+              <div class="form-row" style="gap:.5rem">
+                <div class="form-group"><label>Ciudad</label><input type="text" id="ch-ciudad" placeholder="Ciudad"/></div>
+                <div class="form-group"><label>CP</label><input type="text" id="ch-cp" placeholder="00000"/></div>
+              </div>
+            </div>
+            <div class="checkout-section">
+              <h4>💳 Datos de Pago</h4>
+              <div class="form-group">
+                <label>Número de Tarjeta</label>
+                <input type="text" id="ch-card" placeholder="1234 5678 9012 3456" maxlength="19"
+                  oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/(.{4})/g,'$1 ').trim().substring(0,19)"/>
+              </div>
+              <div class="form-row" style="gap:.5rem">
+                <div class="form-group">
+                  <label>Titular</label>
+                  <input type="text" id="ch-titular" placeholder="Nombre en la tarjeta"/>
+                </div>
+              </div>
+              <div class="form-row" style="gap:.5rem">
+                <div class="form-group">
+                  <label>Vencimiento</label>
+                  <input type="text" id="ch-expiry" placeholder="MM/AA" maxlength="5"
+                    oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>=2)v=v.slice(0,2)+'/'+v.slice(2);this.value=v;"/>
+                </div>
+                <div class="form-group">
+                  <label>CVV</label>
+                  <input type="password" id="ch-cvv" placeholder="123" maxlength="4"
+                    oninput="this.value=this.value.replace(/[^0-9]/g,'')"/>
+                </div>
+              </div>
+              <div style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);padding:.75rem;margin-top:.5rem;font-size:.78rem;color:var(--gray);">
+                🔒 Pago simulado — no se realizan cargos reales
+              </div>
+              <div id="checkout-msg" style="margin-top:.75rem;"></div>
+              <button class="btn-primary" style="width:100%;justify-content:center;margin-top:.75rem;font-size:1rem;padding:1rem;" onclick="finalizarCompra()">
+                Confirmar y Pagar →
+              </button>
+            </div>
+          ` : `
+            <div class="checkout-section">
+              <p style="color:var(--gray);font-size:.88rem;text-align:center;margin-bottom:1rem;">Inicia sesión para finalizar tu compra</p>
+              <a href="../index.html" class="btn-primary" style="width:100%;justify-content:center;display:flex;">Iniciar Sesión →</a>
+            </div>
+          `}
+        </div>
+      </div>`;
+  }
+
+  async function removeItem(id) { await Cart.removeItem(id); await Cart.updateBadge(); await renderCartPage(); }
+
+  async function clearCart() {
+    if (!confirm('¿Vaciar el carrito?')) return;
+    await Cart.clearCart(); await Cart.updateBadge(); await renderCartPage();
+  }
+
+  async function finalizarCompra() {
+    const dir     = document.getElementById('ch-dir')?.value?.trim() || '';
+    const ciudad  = document.getElementById('ch-ciudad')?.value?.trim() || '';
+    const cp      = document.getElementById('ch-cp')?.value?.trim() || '';
+    const card    = (document.getElementById('ch-card')?.value || '').replace(/\s/g,'');
+    const titular = document.getElementById('ch-titular')?.value?.trim() || '';
+    const expiry  = document.getElementById('ch-expiry')?.value?.trim() || '';
+    const cvv     = document.getElementById('ch-cvv')?.value?.trim() || '';
+    const msgEl   = document.getElementById('checkout-msg');
+
+    if (!dir || !ciudad) {
+      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Por favor completa la dirección de entrega.</div>';
+      return;
+    }
+    if (card.length < 16) {
+      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Número de tarjeta inválido (16 dígitos).</div>';
+      return;
+    }
+    if (!titular) {
+      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Ingresa el nombre del titular.</div>';
+      return;
+    }
+    if (expiry.length < 5) {
+      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Fecha de vencimiento inválida.</div>';
+      return;
+    }
+    if (cvv.length < 3) {
+      msgEl.innerHTML = '<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ CVV inválido.</div>';
+      return;
+    }
+
+    msgEl.innerHTML = '<div style="color:var(--gold);font-size:.85rem;padding:.5rem 0;">⏳ Procesando pago...</div>';
+
+    // Simulate payment processing delay
+    await new Promise(r => setTimeout(r, 1500));
+
+    try {
+      const pedido = await Pedidos.crear(currentUser.id, cartItems, {
+        direccion_entrega: dir, ciudad_entrega: ciudad, cp_entrega: cp
+      });
+      await Cart.updateBadge();
+      window.location.href = `mis-pedidos.html?nuevo=${pedido.numero_pedido}`;
+    } catch (err) {
+      msgEl.innerHTML = `<div style="color:#e74c3c;font-size:.85rem;padding:.5rem 0;">⚠️ Error: ${err.message}</div>`;
+    }
+  }
+
+  async function doLogout() {
+    try { await supabaseClient.auth.signOut(); } catch(e) {}
+    try { localStorage.clear(); } catch(e) {}
+    try { sessionStorage.clear(); } catch(e) {}
+    window.location.replace('../index.html');
+  }
+
+  function toggleUserMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('userMenu');
+    if (menu) menu.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

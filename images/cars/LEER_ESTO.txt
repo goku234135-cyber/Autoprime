@@ -1,0 +1,20 @@
+CARPETA DE IMÁGENES DE AUTOS
+==============================
+
+Pon aquí tus fotos de los autos en formato JPG, PNG o WEBP.
+
+Nombres sugeridos (según los productos de ejemplo en Supabase):
+- mercedes-c300.jpg
+- bmw-m4.jpg
+- audi-q7.jpg
+- porsche-cayenne.jpg
+- tesla-models.jpg
+- range-rover-sport.jpg
+
+Tamaño recomendado: 800x500 px o mayor
+Formato preferido: JPG (mejor balance calidad/tamaño)
+
+Para cambiar la imagen de un producto:
+1. Pon la foto aquí con el nombre que quieras
+2. Ve a Supabase → Table Editor → productos
+3. Edita el campo imagen_principal con: images/cars/tu-foto.jpg
