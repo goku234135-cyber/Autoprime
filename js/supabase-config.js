@@ -338,5 +338,23 @@ const NavHelper = {
   }
 };
 
+// ============================================================
+//   FUNCIONES GLOBALES (disponibles en todas las páginas)
+// ============================================================
+window.doLogout = async function() {
+  try { await supabaseClient.auth.signOut({ scope: 'local' }); } catch(e) {}
+  try { localStorage.clear(); } catch(e) {}
+  try { sessionStorage.clear(); } catch(e) {}
+  // Detectar si estamos en /pages/ o en la raíz
+  const enSubpagina = window.location.pathname.includes('/pages/');
+  window.location.replace(enSubpagina ? '../index.html' : 'index.html');
+};
+
+window.toggleUserMenu = function(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('userMenu');
+  if (menu) menu.classList.toggle('open');
+};
+
 // Badge al cargar cada página
 document.addEventListener('DOMContentLoaded', () => Cart.updateBadge());

@@ -161,8 +161,22 @@
   let cardExpiry  = null;
   let cardCvc     = null;
 
+  async function doLogout() {
+    try { await supabaseClient.auth.signOut(); } catch(e) {}
+    try { localStorage.clear(); } catch(e) {}
+    try { sessionStorage.clear(); } catch(e) {}
+    window.location.replace('../index.html');
+  }
+
+  function toggleUserMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('userMenu');
+    if (menu) menu.classList.toggle('open');
+  }
+
   // ── INIT ──────────────────────────────────────────────────────────
-  Auth.onAuthStateChange(async () => {
+  Auth.onAuthStateChange(async (event) => {
+    if (event === 'SIGNED_OUT') { window.location.replace('../index.html'); return; }
     currentUser = await Auth.getCurrentUser();
     await NavHelper.init('../');
     await renderCartPage();

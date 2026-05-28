@@ -126,6 +126,7 @@
 <script src="../js/supabase-config.js"></script>
 <script>
   Auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_OUT') { window.location.replace('../index.html'); return; }
     const user = await Auth.getCurrentUser();
     await NavHelper.init('../');
     await Cart.updateBadge();

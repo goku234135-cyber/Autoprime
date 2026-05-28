@@ -124,6 +124,7 @@
   let currentProfile = null;
 
   Auth.onAuthStateChange(async (event) => {
+    if (event === 'SIGNED_OUT') { window.location.replace('../index.html'); return; }
     currentUser = await Auth.getCurrentUser();
     if (currentUser) {
       currentProfile = await Profile.get(currentUser.id).catch(() => ({}));

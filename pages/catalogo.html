@@ -116,7 +116,8 @@
 <script>
   let allProducts = [];
 
-  Auth.onAuthStateChange(async () => {
+  Auth.onAuthStateChange(async (event) => {
+    if (event === 'SIGNED_OUT') { window.location.replace('../index.html'); return; }
     await NavHelper.init('../');
     await Cart.updateBadge();
   });

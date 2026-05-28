@@ -207,10 +207,10 @@
   // ─── Init ───────────────────────────────────────────────
   // Escuchar cambios de auth (login, logout, refresco de token)
   Auth.onAuthStateChange(async (event, session) => {
-    await NavHelper.init('');        // '' = estamos en raíz
+    if (event === 'SIGNED_OUT') { window.location.reload(); return; }
+    await NavHelper.init('');
     await Cart.updateBadge();
-    if (event === 'SIGNED_IN')  closeAuthModal();
-    if (event === 'SIGNED_OUT') await Cart.updateBadge();
+    if (event === 'SIGNED_IN') closeAuthModal();
   });
 
   document.addEventListener('DOMContentLoaded', async () => {
@@ -382,17 +382,10 @@
   }
 
   async function doLogout() {
-    try { await Auth.logout(); } catch(e) {}
-    // Actualizar nav inmediatamente
-    const area = document.getElementById('nav-user-area');
-    if (area) area.innerHTML = '<button class="btn-primary" onclick="openAuthModal()">Iniciar Sesión</button>';
-    const badge = document.getElementById('cart-badge');
-    if (badge) { badge.textContent = '0'; badge.style.display = 'none'; }
-    const menu = document.getElementById('userMenu');
-    if (menu) menu.classList.remove('open');
-    // Recargar productos sin usuario
-    await loadProductos();
-    closeAuthModal();
+    try { await supabaseClient.auth.signOut({ scope: 'local' }); } catch(e) {}
+    try { localStorage.clear(); } catch(e) {}
+    try { sessionStorage.clear(); } catch(e) {}
+    window.location.reload();
   }
 
   function toggleUserMenu(e) {
